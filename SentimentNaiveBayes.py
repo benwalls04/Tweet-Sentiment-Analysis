@@ -3,7 +3,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pickle
 import math
-import random
 
 def file_reader(file_path, label):
     list_of_lines = []
@@ -135,103 +134,82 @@ class NaiveBayesClassifier(object):
 
     def train(self, training_sentences, training_labels):
         
-        # See the HW_3_How_To.pptx for details
-        
-        # Get number of sentences in the training set
         N_sentences = len(training_sentences)
 
-        # This will turn the training_sentences into the format described in the HW_3_How_To.pptx
         training_set = self.word_tokenization_dataset(training_sentences)
 
-        # Get vocabulary (dictionary) used in training set
         self.V = self.compute_vocabulary(training_set)
-
-        # Get set of all classes
-        all_classes = set(training_labels)
-        #-------- TO DO (begin) --------#
-        # Note that, you have to further change each sentence in training_set into a binary BOW representation, given self.V
-
-        # Compute the conditional probabilities and priors from training data, and save them in:
-        # self.prior
-        # self.conditional
-        # You can use any data structure you want.
-        # You don't have to return anything. self.conditional and self.prior will be called in def predict():
 
         labels = [-1, 0, 1]
         lab_counts = [0, 0, 0]
-        label_map = {}
 
+        ## make 3 BOWS initialized to length Self.V * N_sentences (one per class)
         BOWS = [np.zeros((N_sentences, len(self.V)), dtype=int) for _ in range(3)]
 
-        for i, s in enumerate(training_set):           
+        for i, s in enumerate(training_set):      
+
+            # count # of labels for each class     
             label = training_labels[i]
             lab_idx = labels.index(label)
             lab_counts[lab_idx] += 1
-            label_map[i] = labels[lab_idx]
 
+            # set BOW index to 1 for every token in the sentence 
             for token in s:
                 BOWS[lab_idx][i, self.V[token]] = 1 
 
+        # remove all rows with only zeros 
+        # makes each BOW contain only sentences that 
         for i in range(len(BOWS)):
             BOW = BOWS[i] 
             BOWS[i] = BOW[~(BOW == 0).all(axis=1)]
-
-        # get probability for each class 
+        
+        # calculate probabilities for each class 
         for count in lab_counts:
             self.prior.append(count / N_sentences)
 
-        self.labelMap = label_map
         self.BOW = BOWS
 
-        ## calculate conditional probabilities for each word in each class 
         for lab_inx, BOW in enumerate(self.BOW):
+            # marginal probability calculation
+            # diagnoal of X * X.T divided by number of entries in that class 
             divisor = lab_counts[lab_idx]
             matrix = BOW.T @ BOW
             diag = np.diag(matrix)
             probs = (list(diag / divisor))
             self.conditional.append(probs)
                                                  
-        # -------- TO DO (end) --------#
-
 
     def predict(self, test_sentence):
-
-        # The input is one test sentence. See the HW_3_How_To.pptx for details
-        
-        # Your are going to save the log probability for each class of the test sentence. See the HW_3_How_To.pptx for details
         label_probability = {
             0: 0,
             1: 0,
             -1:0,
         }
 
-        # This will tokenize the test_sentence: test_sentence[n] will be the "n-th" word in a sentence (n starts from 0)
         test_sentence = self.word_tokenization_sentence(test_sentence)
 
-        #-----------------------#
-        #-------- TO DO (begin) --------#
-        # Based on the test_sentence, please first turn it into the binary BOW representation (given self.V) and compute the log probability
-        # Please then use self.prior and self.conditional to calculate the log probability for each class. See the HW_3_How_To.pptx for details 
-
-        # Return a dictionary of log probability for each class for a given test sentence:
-        # e.g., {0: -39.39854137691295, 1: -41.07638511893377, -1: -42.93948478571315}
-        # Please follow the PPT to first perform log (you may use np.log) to each probability term and sum them.
-        
-
+        # epislon for division by 0
         epsilon = 1e-10
-
-        # -------- TO DO (end) --------
+        
+        # iterate throguh each class 
         for lab_idx, label in enumerate([-1, 0, 1]):
             conditional = self.conditional[lab_idx]
+
+            # start sum with the log prob of that class 
             prob = math.log(self.prior[lab_idx], 10)
 
+            # go through each token in the sentence 
             for token, tok_idx in self.V.items():
+                
+                # get the marginal probability, add/subtract epilon if needed 
                 prob_of_true = max(conditional[tok_idx], epsilon)
                 if (prob_of_true == 1.0):
                     prob_of_true -= epsilon
 
+                # if the token is in the sentence
                 if token in test_sentence: 
                     prob += math.log(prob_of_true, 10)
+                # if the token is not in the sentence, take 1 - probability 
                 else: 
                     prob += math.log(1 - prob_of_true, 10)
 
